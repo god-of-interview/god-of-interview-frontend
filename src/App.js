@@ -6,6 +6,7 @@ import ProfilePage from './pages/ProfilePage';
 import EditProfilePage from './pages/EditProfilePage';
 import UserSearchPage from './pages/UserSearchPage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
+import GuidePage from './pages/GuidePage';
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState('home');
@@ -22,6 +23,8 @@ const App = () => {
         return <LoginPage onNavigate={handleNavigation} />;
       case 'signup':
         return <SignupPage onNavigate={handleNavigation} />;
+      case 'guide':
+        return <GuidePage onNavigate={handleNavigation} />;
       case 'profile':
         return <ProfilePage onNavigate={handleNavigation} />;
       case 'edit-profile':
