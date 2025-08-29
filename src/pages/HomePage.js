@@ -1,11 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { Camera, Users, BarChart3, Sparkles, ArrowRight, Star, Menu, X, User, MessageCircle, LogOut } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Camera, Users, BarChart3, Sparkles, ArrowRight, Star, Menu, X, User, MessageCircle, LogOut, ChevronDown, Edit, Trash2 } from 'lucide-react';
 
 const HomePage = ({ onNavigate }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [userInfo, setUserInfo] = useState(null);
+    const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // 드롭다운 외부 클릭 감지
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsProfileDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -22,7 +36,7 @@ const HomePage = ({ onNavigate }) => {
             setIsLoggedIn(true);
             // TODO: 향후 토큰에서 사용자 정보를 추출하거나 API로 가져오기
             // 지금은 간단히 토큰 존재 여부만 확인
-            setUserInfo({ name: '사용자' }); // 임시 데이터
+            setUserInfo({ name: '사용자', nickname: '홍길동' });
         } else {
             setIsLoggedIn(false);
             setUserInfo(null);
@@ -33,6 +47,7 @@ const HomePage = ({ onNavigate }) => {
         localStorage.removeItem('accessToken');
         setIsLoggedIn(false);
         setUserInfo(null);
+        setIsProfileDropdownOpen(false);
         // 페이지 새로고침으로 상태 초기화
         window.location.reload();
     };
@@ -121,8 +136,8 @@ const HomePage = ({ onNavigate }) => {
                                 <Sparkles className="h-6 w-6 text-white" />
                             </div>
                             <span className="ml-3 text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                면접의 神
-              </span>
+                                면접의 神
+                            </span>
                         </div>
 
                         <div className="hidden md:block">
@@ -140,22 +155,78 @@ const HomePage = ({ onNavigate }) => {
                                 {/* 로그인 상태에 따른 버튼 변경 */}
                                 {isLoggedIn ? (
                                     <div className="flex items-center space-x-4">
-                    <span className="text-gray-700 text-sm">
-                      안녕하세요, {userInfo?.name}님
-                    </span>
                                         <button
-                                            onClick={() => onNavigate('dashboard')}
-                                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                                            onClick={() => onNavigate('user-search')}
+                                            className="text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors"
                                         >
-                                            대시보드
+                                            사용자 검색
                                         </button>
-                                        <button
-                                            onClick={handleLogout}
-                                            className="text-gray-700 hover:text-red-600 px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1"
-                                        >
-                                            <LogOut className="w-4 h-4" />
-                                            로그아웃
-                                        </button>
+
+                                        {/* 프로필 드롭다운 */}
+                                        <div className="relative" ref={dropdownRef}>
+                                            <button
+                                                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                                                className="flex items-center gap-2 text-gray-700 hover:text-blue-600 px-3 py-2 text-sm font-medium transition-colors"
+                                            >
+                                                <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
+                                                    <User className="w-4 h-4 text-white" />
+                                                </div>
+                                                <span>{userInfo?.nickname || '사용자'}</span>
+                                                <ChevronDown className={`w-4 h-4 transition-transform ${
+                                                    isProfileDropdownOpen ? 'rotate-180' : ''
+                                                }`} />
+                                            </button>
+
+                                            {/* 드롭다운 메뉴 */}
+                                            {isProfileDropdownOpen && (
+                                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                                                    <button
+                                                        onClick={() => {
+                                                            onNavigate('profile');
+                                                            setIsProfileDropdownOpen(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                                                    >
+                                                        <User className="w-4 h-4" />
+                                                        마이페이지
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => {
+                                                            onNavigate('edit-profile');
+                                                            setIsProfileDropdownOpen(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                                                    >
+                                                        <Edit className="w-4 h-4" />
+                                                        내 정보 수정
+                                                    </button>
+
+                                                    <div className="border-t border-gray-100 my-1"></div>
+
+                                                    <button
+                                                        onClick={() => {
+                                                            onNavigate('delete-account');
+                                                            setIsProfileDropdownOpen(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                        회원 탈퇴
+                                                    </button>
+
+                                                    <div className="border-t border-gray-100 my-1"></div>
+
+                                                    <button
+                                                        onClick={handleLogout}
+                                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                                                    >
+                                                        <LogOut className="w-4 h-4" />
+                                                        로그아웃
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ) : (
                                     <button
@@ -168,6 +239,7 @@ const HomePage = ({ onNavigate }) => {
                             </div>
                         </div>
 
+                        {/* 모바일 메뉴 버튼 */}
                         <div className="md:hidden">
                             <button
                                 onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -179,7 +251,7 @@ const HomePage = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Mobile menu */}
+                {/* 모바일 메뉴 */}
                 {isMenuOpen && (
                     <div className="md:hidden">
                         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white shadow-lg">
@@ -196,18 +268,56 @@ const HomePage = ({ onNavigate }) => {
                             {/* 모바일 메뉴 로그인 상태 처리 */}
                             {isLoggedIn ? (
                                 <div className="border-t pt-3 mt-3">
-                                    <p className="px-3 py-2 text-gray-700 text-base">
-                                        안녕하세요, {userInfo?.name}님
-                                    </p>
+                                    <div className="px-3 py-2 flex items-center gap-3">
+                                        <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
+                                            <User className="w-4 h-4 text-white" />
+                                        </div>
+                                        <span className="text-gray-700 font-medium">{userInfo?.nickname || '사용자'}</span>
+                                    </div>
+
                                     <button
-                                        onClick={() => onNavigate('dashboard')}
-                                        className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-base font-medium mt-2"
+                                        onClick={() => {
+                                            onNavigate('user-search');
+                                            setIsMenuOpen(false);
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-gray-700 hover:text-blue-600 block text-base font-medium"
                                     >
-                                        대시보드
+                                        사용자 검색
                                     </button>
+
+                                    <button
+                                        onClick={() => {
+                                            onNavigate('profile');
+                                            setIsMenuOpen(false);
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-gray-700 hover:text-blue-600 block text-base font-medium"
+                                    >
+                                        마이페이지
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            onNavigate('edit-profile');
+                                            setIsMenuOpen(false);
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-gray-700 hover:text-blue-600 block text-base font-medium"
+                                    >
+                                        내 정보 수정
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            onNavigate('delete-account');
+                                            setIsMenuOpen(false);
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-red-600 hover:text-red-700 block text-base font-medium"
+                                    >
+                                        회원 탈퇴
+                                    </button>
+
                                     <button
                                         onClick={handleLogout}
-                                        className="w-full text-red-600 hover:text-red-700 px-4 py-2 text-base font-medium mt-2 flex items-center justify-center gap-2"
+                                        className="w-full text-left px-3 py-2 text-gray-700 hover:text-red-600 block text-base font-medium flex items-center gap-2"
                                     >
                                         <LogOut className="w-4 h-4" />
                                         로그아웃
@@ -234,8 +344,8 @@ const HomePage = ({ onNavigate }) => {
                             <h1 className="text-4xl font-bold text-gray-900 tracking-tight sm:text-5xl lg:text-6xl">
                                 <span className="block">AI가 도와주는</span>
                                 <span className="block bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  스마트 면접 연습
-                </span>
+                                    스마트 면접 연습
+                                </span>
                             </h1>
                             <p className="mt-6 text-xl text-gray-600 sm:max-w-xl sm:mx-auto lg:mx-0">
                                 실시간 영상 분석과 AI 피드백으로 면접 실력을 향상시키세요.
@@ -422,10 +532,7 @@ const HomePage = ({ onNavigate }) => {
             <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600">
                 <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                     <h2 className="text-3xl font-bold text-white sm:text-4xl">
-                        {isLoggedIn
-                            ? "지금 바로 AI 면접 연습을 시작해보세요"
-                            : "지금 바로 AI 면접 연습을 시작해보세요"
-                        }
+                        지금 바로 AI 면접 연습을 시작해보세요
                     </h2>
                     <p className="mt-4 text-xl text-blue-100 max-w-2xl mx-auto">
                         {isLoggedIn
