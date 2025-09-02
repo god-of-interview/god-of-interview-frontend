@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Play, Pause, Square, SkipForward, Clock, Camera, Mic, AlertCircle, CheckCircle } from 'lucide-react';
 
 const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
@@ -15,6 +15,13 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
     // 면접 진행 상태
     const [interviewStarted, setInterviewStarted] = useState(false);
     const [interviewCompleted, setInterviewCompleted] = useState(false);
+
+    // WebRTC 관련 상태
+    const [mediaStream, setMediaStream] = useState(null);
+    const [mediaRecorder, setMediaRecorder] = useState(null);
+    const [recordedChunks, setRecordedChunks] = useState([]);
+    const [recordingError, setRecordingError] = useState(null);
+    const videoRef = useRef(null);
 
     useEffect(() => {
         if (selectedJob) {
@@ -34,6 +41,15 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
         }
         return () => clearInterval(interval);
     }, [isRecording]);
+
+    // 컴포넌트 언마운트 시 카메라 정리
+    useEffect(() => {
+        return () => {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [mediaStream]);
 
     const fetchQuestions = async () => {
         try {
@@ -67,31 +83,182 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
         }
     };
 
-    const startInterview = () => {
+    const startInterview = async () => {
         setInterviewStarted(true);
         setCurrentQuestionIndex(0);
+        await initializeCamera();
     };
 
-    const startRecording = () => {
-        setIsRecording(true);
-        setRecordingTime(0);
-        // 실제 녹화 로직은 나중에 구현 (WebRTC)
-        console.log('녹화 시작:', questions[currentQuestionIndex].content);
+    // 카메라 초기화
+    const initializeCamera = async () => {
+        try {
+            setRecordingError(null);
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    sampleRate: 44100
+                }
+            });
+
+            setMediaStream(stream);
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+
+        } catch (error) {
+            console.error('카메라 초기화 실패:', error);
+
+            if (error.name === 'NotAllowedError') {
+                setRecordingError('카메라와 마이크 권한이 필요합니다. 브라우저 설정에서 권한을 허용해주세요.');
+            } else if (error.name === 'NotFoundError') {
+                setRecordingError('카메라 또는 마이크를 찾을 수 없습니다.');
+            } else if (error.name === 'NotReadableError') {
+                setRecordingError('카메라 또는 마이크가 다른 애플리케이션에서 사용 중입니다.');
+            } else {
+                setRecordingError('카메라 연결 실패: ' + error.message);
+            }
+        }
+    };
+
+    const startRecording = async () => {
+        if (!mediaStream) {
+            await initializeCamera();
+            return;
+        }
+
+        try {
+            setRecordingError(null);
+            setRecordingTime(0);
+
+            // MediaRecorder 설정
+            const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+
+            // 브라우저 호환성 체크
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options.mimeType = 'video/webm;codecs=vp8,opus';
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options.mimeType = 'video/webm';
+                }
+            }
+
+            const recorder = new MediaRecorder(mediaStream, options);
+            const chunks = [];
+
+            recorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    chunks.push(event.data);
+                }
+            };
+
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                setRecordedChunks([blob]);
+                handleVideoRecorded(blob);
+            };
+
+            recorder.onerror = (event) => {
+                console.error('녹화 오류:', event.error);
+                setRecordingError('녹화 중 오류가 발생했습니다.');
+            };
+
+            recorder.start(1000); // 1초마다 데이터 수집
+            setMediaRecorder(recorder);
+            setIsRecording(true);
+
+            console.log('녹화 시작:', questions[currentQuestionIndex].content);
+
+        } catch (error) {
+            console.error('녹화 시작 실패:', error);
+            setRecordingError('녹화를 시작할 수 없습니다: ' + error.message);
+        }
     };
 
     const stopRecording = () => {
-        setIsRecording(false);
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            setIsRecording(false);
+            console.log('녹화 중지');
+        }
+    };
 
+    const handleVideoRecorded = async (videoBlob) => {
         // 현재 질문의 답변 저장
         const newAnswers = [...answers];
         newAnswers[currentQuestionIndex] = {
             questionId: questions[currentQuestionIndex].id,
+            videoBlob: videoBlob,
             recordingTime: recordingTime,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            uploaded: false
         };
         setAnswers(newAnswers);
 
-        console.log('녹화 종료. 답변 저장:', newAnswers[currentQuestionIndex]);
+        console.log('답변 저장 완료:', {
+            question: questions[currentQuestionIndex].content,
+            duration: recordingTime,
+            fileSize: videoBlob.size
+        });
+
+        // 서버에 업로드
+        try {
+            await uploadVideoToServer(videoBlob, questions[currentQuestionIndex].id);
+            newAnswers[currentQuestionIndex].uploaded = true;
+            setAnswers([...newAnswers]);
+            console.log('서버 업로드 성공');
+        } catch (error) {
+            console.error('서버 업로드 실패:', error);
+            // 업로드 실패해도 로컬에는 저장되어 있음
+        }
+    };
+
+    const uploadVideoToServer = async (videoBlob, questionId) => {
+        const formData = new FormData();
+
+        // 파일명 생성: userId_sessionId_questionId_timestamp.webm
+        const userId = localStorage.getItem('userId') || 'user';
+        const sessionId = Date.now(); // 실제로는 서버에서 생성한 세션 ID 사용
+        const timestamp = Date.now();
+        const fileName = `${userId}_${sessionId}_${questionId}_${timestamp}.webm`;
+
+        formData.append('video', videoBlob, fileName);
+        formData.append('questionId', questionId);
+        formData.append('userId', userId);
+        formData.append('jobId', selectedJob.id);
+        formData.append('duration', recordingTime);
+
+        const response = await fetch('http://localhost:8080/api/interview/upload', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('업로드 실패');
+        }
+
+        return await response.json();
+    };
+
+    const downloadVideo = (videoBlob, filename) => {
+        const url = URL.createObjectURL(videoBlob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
     };
 
     const goToNextQuestion = () => {
@@ -120,9 +287,14 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
     };
 
     const completeInterview = () => {
+        // 카메라 스트림 정리
+        if (mediaStream) {
+            mediaStream.getTracks().forEach(track => track.stop());
+            setMediaStream(null);
+        }
+
         setInterviewCompleted(true);
         console.log('면접 완료! 모든 답변:', answers);
-        // 여기서 서버로 답변 데이터 전송 (향후 구현)
     };
 
     const formatTime = (seconds) => {
@@ -173,6 +345,37 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
                         총 {questions.length}개의 질문에 답변하셨습니다.
                         AI 분석 결과는 잠시 후 확인하실 수 있습니다.
                     </p>
+
+                    {/* 녹화된 비디오들 다운로드 옵션 */}
+                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                        <h3 className="font-semibold mb-3">녹화된 답변들</h3>
+                        <div className="space-y-2">
+                            {answers.map((answer, index) => (
+                                answer && answer.videoBlob && (
+                                    <div key={index} className="flex items-center justify-between bg-white rounded p-3">
+                                        <div className="text-left">
+                                            <span className="text-sm font-medium">질문 {index + 1}</span>
+                                            <p className="text-xs text-gray-500">
+                                                {formatTime(answer.recordingTime)} | {(answer.videoBlob.size / (1024 * 1024)).toFixed(1)}MB
+                                            </p>
+                                            {answer.uploaded ? (
+                                                <span className="text-xs text-green-600">✓ 업로드 완료</span>
+                                            ) : (
+                                                <span className="text-xs text-orange-600">⏳ 업로드 대기</span>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => downloadVideo(answer.videoBlob, `question_${index + 1}.webm`)}
+                                            className="text-blue-600 hover:text-blue-800 text-sm px-3 py-1 border border-blue-300 rounded hover:bg-blue-50 transition-colors"
+                                        >
+                                            다운로드
+                                        </button>
+                                    </div>
+                                )
+                            ))}
+                        </div>
+                    </div>
+
                     <div className="flex gap-4 justify-center">
                         <button
                             onClick={() => onNavigate('home')}
@@ -312,12 +515,24 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
                             </div>
                         </div>
 
+                        {/* 오류 메시지 */}
+                        {recordingError && (
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                                <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+                                <div>
+                                    <p className="text-red-700 text-sm font-medium">녹화 오류</p>
+                                    <p className="text-red-600 text-sm">{recordingError}</p>
+                                </div>
+                            </div>
+                        )}
+
                         {/* 녹화 컨트롤 */}
                         <div className="flex items-center justify-center gap-4">
                             {!isRecording ? (
                                 <button
                                     onClick={startRecording}
                                     className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                                    disabled={!mediaStream && recordingError}
                                 >
                                     <Play className="w-5 h-5" />
                                     답변 시작
@@ -353,11 +568,23 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
                             <h2 className="text-lg font-semibold text-gray-900 mb-2">카메라 미리보기</h2>
                         </div>
 
-                        <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center mb-4">
-                            <div className="text-center text-white">
-                                <Camera className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                                <p className="text-gray-300">카메라가 곧 연결됩니다</p>
-                            </div>
+                        <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center mb-4 overflow-hidden">
+                            {mediaStream ? (
+                                <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    muted
+                                    playsInline
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <div className="text-center text-white">
+                                    <Camera className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                                    <p className="text-gray-300">
+                                        {recordingError ? '카메라 연결 실패' : '카메라 연결 중...'}
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         {/* 답변 상태 표시 */}
@@ -365,25 +592,25 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
                             {questions.map((_, index) => (
                                 <div key={index} className="flex items-center gap-3">
                                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-medium ${
-                                        index < currentQuestionIndex
+                                        answers[index]
                                             ? 'bg-green-100 text-green-600'
                                             : index === currentQuestionIndex
                                                 ? 'bg-blue-100 text-blue-600'
                                                 : 'bg-gray-100 text-gray-400'
                                     }`}>
-                                        {index < currentQuestionIndex
+                                        {answers[index]
                                             ? <CheckCircle className="w-4 h-4" />
                                             : index + 1
                                         }
                                     </div>
                                     <span className={`text-sm ${
-                                        index < currentQuestionIndex
+                                        answers[index]
                                             ? 'text-green-600 font-medium'
                                             : index === currentQuestionIndex
                                                 ? 'text-blue-600 font-medium'
                                                 : 'text-gray-500'
                                     }`}>
-                                        질문 {index + 1} {answers[index] ? '답변 완료' : ''}
+                                        질문 {index + 1} {answers[index] ? `(${formatTime(answers[index].recordingTime)})` : ''}
                                     </span>
                                 </div>
                             ))}
