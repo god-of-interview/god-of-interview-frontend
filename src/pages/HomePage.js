@@ -29,19 +29,46 @@ const HomePage = ({ onNavigate }) => {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // 로그인 상태 확인
+    // 로그인 상태 확인 및 사용자 정보 가져오기
     useEffect(() => {
         const token = localStorage.getItem('accessToken');
         if (token) {
             setIsLoggedIn(true);
-            // TODO: 향후 토큰에서 사용자 정보를 추출하거나 API로 가져오기
-            // 지금은 간단히 토큰 존재 여부만 확인
-            setUserInfo({ name: '사용자', nickname: '홍길동' });
+            fetchUserProfile(token);
         } else {
             setIsLoggedIn(false);
             setUserInfo(null);
         }
     }, []);
+
+    const fetchUserProfile = async (token) => {
+        try {
+            const response = await fetch('http://localhost:8080/api/users/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                setUserInfo({
+                    name: result.data.nickname,
+                    nickname: result.data.nickname,
+                    id: result.data.id
+                });
+            } else {
+                // 토큰이 유효하지 않은 경우 로그아웃 처리
+                localStorage.removeItem('accessToken');
+                setIsLoggedIn(false);
+                setUserInfo(null);
+            }
+        } catch (error) {
+            console.error('사용자 정보를 가져오는데 실패했습니다:', error);
+            // 네트워크 오류 등의 경우 기본값 설정
+            setUserInfo({ name: '사용자', nickname: '사용자' });
+        }
+    };
 
     const handleLogout = () => {
         localStorage.removeItem('accessToken');
@@ -74,7 +101,7 @@ const HomePage = ({ onNavigate }) => {
         {
             icon: Users,
             title: "직업별 맞춤 질문",
-            description: "IT, 금융, 제조업 등 다양한 분야의 실제 면접 질문으로 연습할 수 있습니다.",
+            description: "백엔드 개발자, 프론트엔드 개발자, 디자이너 등 다양한 직업의 실제 면접 질문으로 연습할 수 있습니다.",
             color: "bg-orange-100 text-orange-600"
         }
     ];
@@ -88,7 +115,7 @@ const HomePage = ({ onNavigate }) => {
         {
             number: "02",
             title: "직업 선택",
-            description: "산업군 → 직무 → 직업 순서로 원하는 분야를 선택합니다."
+            description: "다양한 분야의 직업 중에서 면접을 연습할 직업을 바로 선택합니다."
         },
         {
             number: "03",

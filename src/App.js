@@ -7,12 +7,19 @@ import EditProfilePage from './pages/EditProfilePage';
 import UserSearchPage from './pages/UserSearchPage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
 import GuidePage from './pages/GuidePage';
+import JobSelectionPage from './pages/JobSelectionPage'; // 직업 선택 페이지 추가
+import InterviewQuestionPage from './pages/InterviewQuestionPage'; // 면접 질문 페이지 추가
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState('home');
+  const [selectedJob, setSelectedJob] = useState(null); // 선택된 직업 저장
 
   const handleNavigation = (page) => {
     setCurrentPage(page);
+  };
+
+  const handleJobSelection = (job) => {
+    setSelectedJob(job);
   };
 
   const renderCurrentPage = () => {
@@ -33,6 +40,20 @@ const App = () => {
         return <UserSearchPage onNavigate={handleNavigation} />;
       case 'delete-account':
         return <DeleteAccountPage onNavigate={handleNavigation} />;
+      case 'job-selection':
+        return (
+            <JobSelectionPage
+                onNavigate={handleNavigation}
+                onJobSelect={handleJobSelection}
+            />
+        );
+      case 'interview':
+        return (
+            <InterviewQuestionPage
+                onNavigate={handleNavigation}
+                selectedJob={selectedJob}
+            />
+        );
       case 'dashboard':
         return (
             <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -40,6 +61,12 @@ const App = () => {
                 <h1 className="text-3xl font-bold text-gray-800 mb-4">대시보드</h1>
                 <p className="text-gray-600 mb-8">곧 멋진 대시보드가 완성될 예정입니다!</p>
                 <div className="flex gap-4 justify-center">
+                  <button
+                      onClick={() => handleNavigation('job-selection')}
+                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg"
+                  >
+                    면접 연습 시작하기
+                  </button>
                   <button
                       onClick={() => handleNavigation('profile')}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
