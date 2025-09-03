@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Briefcase, ChevronRight, ArrowLeft, Users, Building2, Code, TrendingUp, Heart, Gavel, Filter, AlertCircle, GraduationCap, Palette, Wrench, Zap, Factory, TreePine, ShoppingCart } from 'lucide-react';
+import { jobService } from '../services/jobService';
 
 const JobSelectionPage = ({ onNavigate, onJobSelect }) => {
     const [categories, setCategories] = useState([]);
@@ -39,20 +40,7 @@ const JobSelectionPage = ({ onNavigate, onJobSelect }) => {
     const fetchCategories = async () => {
         try {
             setIsLoading(true);
-            const token = localStorage.getItem('accessToken');
-
-            const response = await fetch('http://localhost:8080/api/jobs/categories', {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('카테고리를 불러오는데 실패했습니다.');
-            }
-
-            const result = await response.json();
+            const result = await jobService.getAllCategories();
             setCategories(result.data);
         } catch (error) {
             setError(error.message);
@@ -65,20 +53,7 @@ const JobSelectionPage = ({ onNavigate, onJobSelect }) => {
     const fetchJobsByCategory = async (jobCategory) => {
         try {
             setIsJobsLoading(true);
-            const token = localStorage.getItem('accessToken');
-
-            const response = await fetch(`http://localhost:8080/api/jobs/categories/${jobCategory}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('직업 목록을 불러오는데 실패했습니다.');
-            }
-
-            const result = await response.json();
+            const result = await jobService.getJobsByCategory(jobCategory);
             setJobs(result.data);
         } catch (error) {
             console.error('직업 목록 조회 중 오류:', error);
@@ -107,8 +82,6 @@ const JobSelectionPage = ({ onNavigate, onJobSelect }) => {
         setJobs([]);
     };
 
-
-
     if (isLoading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -126,12 +99,20 @@ const JobSelectionPage = ({ onNavigate, onJobSelect }) => {
                 <div className="text-center">
                     <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
                     <p className="text-red-600 mb-4">{error}</p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-                    >
-                        다시 시도
-                    </button>
+                    <div className="flex gap-4 justify-center">
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+                        >
+                            다시 시도
+                        </button>
+                        <button
+                            onClick={() => onNavigate('home')}
+                            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
+                        >
+                            홈으로
+                        </button>
+                    </div>
                 </div>
             </div>
         );
@@ -144,7 +125,7 @@ const JobSelectionPage = ({ onNavigate, onJobSelect }) => {
                 <div className="max-w-6xl mx-auto px-4 py-6">
                     <div className="flex items-center mb-6">
                         <button
-                            onClick={step === 1 ? () => onNavigate('home') : handleBackToCategories}
+                            onClick={step === 1 ? () => onNavigate('guide') : handleBackToCategories}
                             className="mr-4 p-2 text-gray-600 hover:text-gray-800 transition-colors"
                         >
                             <ArrowLeft className="w-6 h-6" />
@@ -180,8 +161,6 @@ const JobSelectionPage = ({ onNavigate, onJobSelect }) => {
                             </div>
                         </div>
                     </div>
-
-
                 </div>
             </div>
 
@@ -239,9 +218,15 @@ const JobSelectionPage = ({ onNavigate, onJobSelect }) => {
                                 <h3 className="text-lg font-medium text-gray-900 mb-2">
                                     등록된 직업이 없습니다
                                 </h3>
-                                <p className="text-gray-600">
+                                <p className="text-gray-600 mb-4">
                                     이 분야의 직업이 곧 추가될 예정입니다
                                 </p>
+                                <button
+                                    onClick={handleBackToCategories}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+                                >
+                                    다른 분야 선택하기
+                                </button>
                             </div>
                         ) : (
                             <>
@@ -254,7 +239,7 @@ const JobSelectionPage = ({ onNavigate, onJobSelect }) => {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {jobs.map((job) => {
-                                        const iconInfo = categoryIcons[job.category] || { icon: Briefcase, color: 'bg-gray-100 text-gray-600' };
+                                        const iconInfo = categoryIcons[job.jobCategory] || { icon: Briefcase, color: 'bg-gray-100 text-gray-600' };
                                         const IconComponent = iconInfo.icon;
 
                                         return (
