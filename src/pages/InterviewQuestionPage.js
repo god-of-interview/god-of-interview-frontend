@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Play, Pause, Square, SkipForward, Clock, Camera, Mic, AlertCircle, CheckCircle } from 'lucide-react';
+import { interviewService } from '../services/interviewService';
 
 const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
     const [questions, setQuestions] = useState([]);
@@ -7,14 +8,15 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // 면접 관련 상태
+    const [interviewId, setInterviewId] = useState(null);
+    const [interviewStarted, setInterviewStarted] = useState(false);
+    const [interviewCompleted, setInterviewCompleted] = useState(false);
+
     // 녹화 관련 상태
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
     const [answers, setAnswers] = useState([]); // 각 질문별 답변 저장
-
-    // 면접 진행 상태
-    const [interviewStarted, setInterviewStarted] = useState(false);
-    const [interviewCompleted, setInterviewCompleted] = useState(false);
 
     // WebRTC 관련 상태
     const [mediaStream, setMediaStream] = useState(null);
@@ -84,9 +86,17 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
     };
 
     const startInterview = async () => {
-        setInterviewStarted(true);
-        setCurrentQuestionIndex(0);
-        await initializeCamera();
+        try {
+            // 백엔드에 면접 시작 요청
+            const result = await interviewService.startInterview(selectedJob.id);
+            setInterviewId(result.data.id);
+
+            setInterviewStarted(true);
+            setCurrentQuestionIndex(0);
+            await initializeCamera();
+        } catch (error) {
+            setError(error.message);
+        }
     };
 
     // 카메라 초기화
@@ -190,7 +200,7 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
     };
 
     const handleVideoRecorded = async (videoBlob) => {
-        // 현재 질문의 답변 저장
+        // 현재 질문의 답변 로컬 저장
         const newAnswers = [...answers];
         newAnswers[currentQuestionIndex] = {
             questionId: questions[currentQuestionIndex].id,
@@ -207,46 +217,21 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
             fileSize: videoBlob.size
         });
 
-        // 서버에 업로드
+        // 백엔드에 업로드
         try {
-            await uploadVideoToServer(videoBlob, questions[currentQuestionIndex].id);
+            await interviewService.uploadVideo(
+                interviewId,
+                currentQuestionIndex + 1, // 질문 번호는 1부터 시작
+                videoBlob
+            );
+
             newAnswers[currentQuestionIndex].uploaded = true;
             setAnswers([...newAnswers]);
             console.log('서버 업로드 성공');
         } catch (error) {
             console.error('서버 업로드 실패:', error);
-            // 업로드 실패해도 로컬에는 저장되어 있음
+            setRecordingError('서버 업로드에 실패했습니다. 나중에 다시 시도해주세요.');
         }
-    };
-
-    const uploadVideoToServer = async (videoBlob, questionId) => {
-        const formData = new FormData();
-
-        // 파일명 생성: userId_sessionId_questionId_timestamp.webm
-        const userId = localStorage.getItem('userId') || 'user';
-        const sessionId = Date.now(); // 실제로는 서버에서 생성한 세션 ID 사용
-        const timestamp = Date.now();
-        const fileName = `${userId}_${sessionId}_${questionId}_${timestamp}.webm`;
-
-        formData.append('video', videoBlob, fileName);
-        formData.append('questionId', questionId);
-        formData.append('userId', userId);
-        formData.append('jobId', selectedJob.id);
-        formData.append('duration', recordingTime);
-
-        const response = await fetch('http://localhost:8080/api/interview/upload', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-            },
-            body: formData
-        });
-
-        if (!response.ok) {
-            throw new Error('업로드 실패');
-        }
-
-        return await response.json();
     };
 
     const downloadVideo = (videoBlob, filename) => {
@@ -286,15 +271,26 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
         }
     };
 
-    const completeInterview = () => {
-        // 카메라 스트림 정리
-        if (mediaStream) {
-            mediaStream.getTracks().forEach(track => track.stop());
-            setMediaStream(null);
-        }
+    const completeInterview = async () => {
+        try {
+            // 백엔드에 면접 완료 요청
+            if (interviewId) {
+                await interviewService.completeInterview(interviewId);
+            }
 
-        setInterviewCompleted(true);
-        console.log('면접 완료! 모든 답변:', answers);
+            // 카메라 스트림 정리
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                setMediaStream(null);
+            }
+
+            setInterviewCompleted(true);
+            console.log('면접 완료! 모든 답변:', answers);
+        } catch (error) {
+            console.error('면접 완료 처리 실패:', error);
+            // 오류가 발생해도 UI상으로는 완료 처리
+            setInterviewCompleted(true);
+        }
     };
 
     const formatTime = (seconds) => {
@@ -346,6 +342,14 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
                         AI 분석 결과는 잠시 후 확인하실 수 있습니다.
                     </p>
 
+                    {interviewId && (
+                        <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                            <p className="text-blue-800 text-sm">
+                                면접 ID: {interviewId}
+                            </p>
+                        </div>
+                    )}
+
                     {/* 녹화된 비디오들 다운로드 옵션 */}
                     <div className="bg-gray-50 rounded-lg p-4 mb-6">
                         <h3 className="font-semibold mb-3">녹화된 답변들</h3>
@@ -384,10 +388,10 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
                             홈으로
                         </button>
                         <button
-                            onClick={() => onNavigate('results')}
+                            onClick={() => onNavigate('dashboard')}
                             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
                         >
-                            결과 보기
+                            대시보드로
                         </button>
                     </div>
                 </div>
@@ -461,9 +465,10 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
                             <div className="mt-8">
                                 <button
                                     onClick={startInterview}
-                                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 rounded-xl text-lg font-semibold transition-all duration-300 transform hover:scale-105"
+                                    disabled={isLoading}
+                                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 rounded-xl text-lg font-semibold transition-all duration-300 transform hover:scale-105 disabled:opacity-50"
                                 >
-                                    면접 시작하기
+                                    {isLoading ? '준비 중...' : '면접 시작하기'}
                                 </button>
                             </div>
                         </div>
@@ -482,7 +487,7 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
                 <div className="max-w-4xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between mb-4">
                         <h1 className="text-xl font-semibold text-gray-900">
-                            {selectedJob?.name} 면접
+                            {selectedJob?.name} 면접 {interviewId && `(ID: ${interviewId})`}
                         </h1>
                         <span className="text-sm text-gray-600">
                             {currentQuestionIndex + 1} / {questions.length}

@@ -8,7 +8,7 @@ const getAuthHeaders = () => {
 };
 
 export const interviewService = {
-    // 면접 시작
+    // 면접 시작 - 새로운 백엔드 API 사용
     startInterview: async (jobId) => {
         try {
             const response = await fetch(`${API_BASE_URL}/start?jobId=${jobId}`, {
@@ -31,7 +31,7 @@ export const interviewService = {
         }
     },
 
-    // 영상 업로드
+    // 영상 업로드 - 새로운 백엔드 API 사용
     uploadVideo: async (interviewId, questionNumber, videoFile) => {
         try {
             const formData = new FormData();
@@ -60,7 +60,7 @@ export const interviewService = {
         }
     },
 
-    // 면접 완료
+    // 면접 완료 - 새로운 백엔드 API 사용
     completeInterview: async (interviewId) => {
         try {
             const response = await fetch(`${API_BASE_URL}/${interviewId}/complete`, {
