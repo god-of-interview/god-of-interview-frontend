@@ -1,3 +1,5 @@
+// src/services/interviewService.js 파일 전체 내용을 이것으로 교체
+
 const API_BASE_URL = 'http://localhost:8080/api/interviews';
 
 const getAuthHeaders = () => {
