@@ -213,7 +213,7 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
 
         // 현재 질문에 이미 답변이 있는 경우 확인
         if (hasCurrentAnswer()) {
-            const confirmed = confirm('이미 녹화된 답변이 있습니다. 다시 녹화하시겠습니까?');
+            const confirmed = window.confirm('이미 녹화된 답변이 있습니다. 다시 녹화하시겠습니까?');
             if (!confirmed) return;
         }
 
@@ -364,7 +364,8 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
         // 모든 질문에 답변했는지 확인
         const unansweredQuestions = answers.filter(answer => !answer || !answer.videoBlob).length;
         if (unansweredQuestions > 0) {
-            if (!confirm(`${unansweredQuestions}개의 질문에 답변하지 않았습니다. 정말 면접을 완료하시겠습니까?`)) {
+            // eslint-disable-next-line no-restricted-globals
+            if (!window.confirm(`${unansweredQuestions}개의 질문에 답변하지 않았습니다. 정말 면접을 완료하시겠습니까?`)) {
                 return;
             }
         }
