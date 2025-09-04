@@ -1,4 +1,4 @@
-// src/pages/InterviewQuestionPage.js - 질문을 카메라 위에 배치한 최종 버전
+// src/pages/InterviewQuestionPage.js - 버그 수정 및 레이아웃 개선 버전
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Play, Square, SkipForward, Clock, Camera, Mic, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
@@ -19,6 +19,7 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
     const [answers, setAnswers] = useState([]);
+    const [isProcessingVideo, setIsProcessingVideo] = useState(false); // 비디오 처리 중 상태 추가
 
     // WebRTC 관련 상태
     const [mediaStream, setMediaStream] = useState(null);
@@ -204,6 +205,18 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
     };
 
     const startRecording = async () => {
+        // 이미 녹화 중이거나 비디오 처리 중인 경우 중단
+        if (isRecording || isProcessingVideo) {
+            console.log('이미 녹화 중이거나 처리 중입니다.');
+            return;
+        }
+
+        // 현재 질문에 이미 답변이 있는 경우 확인
+        if (hasCurrentAnswer()) {
+            const confirmed = confirm('이미 녹화된 답변이 있습니다. 다시 녹화하시겠습니까?');
+            if (!confirmed) return;
+        }
+
         if (!mediaStream) {
             await initializeCamera();
             return;
@@ -212,6 +225,7 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
         try {
             setRecordingError(null);
             setRecordingTime(0);
+            setIsProcessingVideo(false);
 
             // 파일 크기를 줄이기 위해 더 낮은 품질 설정 사용
             const options = {
@@ -236,6 +250,7 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
             };
 
             recorder.onstop = () => {
+                setIsProcessingVideo(true);
                 const blob = new Blob(chunks, { type: 'video/webm' });
                 handleVideoRecorded(blob);
             };
@@ -255,51 +270,55 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
     };
 
     const stopRecording = () => {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
+        if (mediaRecorder && mediaRecorder.state === 'recording' && !isProcessingVideo) {
             mediaRecorder.stop();
             setIsRecording(false);
         }
     };
 
     const handleVideoRecorded = async (videoBlob) => {
-        const newAnswers = [...answers];
-        newAnswers[currentQuestionIndex] = {
-            questionId: questions[currentQuestionIndex].id,
-            videoBlob: videoBlob,
-            recordingTime: recordingTime,
-            timestamp: new Date().toISOString(),
-            uploaded: false
-        };
-        setAnswers(newAnswers);
-
-        console.log(`답변 저장: ${(videoBlob.size / (1024 * 1024)).toFixed(1)}MB`);
-
-        // 백엔드 업로드 (에러 처리 개선)
         try {
-            await interviewService.uploadVideo(
-                interviewId,
-                currentQuestionIndex + 1,
-                videoBlob
-            );
+            const newAnswers = [...answers];
+            newAnswers[currentQuestionIndex] = {
+                questionId: questions[currentQuestionIndex].id,
+                videoBlob: videoBlob,
+                recordingTime: recordingTime,
+                timestamp: new Date().toISOString(),
+                uploaded: false
+            };
+            setAnswers(newAnswers);
 
-            newAnswers[currentQuestionIndex].uploaded = true;
-            setAnswers([...newAnswers]);
-            console.log('서버 업로드 성공');
-        } catch (error) {
-            console.error('업로드 실패:', error);
+            console.log(`답변 저장: ${(videoBlob.size / (1024 * 1024)).toFixed(1)}MB`);
 
-            // 구체적인 오류 메시지 표시
-            let errorMsg = '서버 업로드에 실패했습니다.';
-            if (error.message.includes('413') || error.message.includes('파일이 너무 큽니다')) {
-                errorMsg = '파일이 너무 큽니다. 더 짧게 답변해주세요.';
-            } else if (error.message.includes('500')) {
-                errorMsg = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+            // 백엔드 업로드 (에러 처리 개선)
+            try {
+                await interviewService.uploadVideo(
+                    interviewId,
+                    currentQuestionIndex + 1,
+                    videoBlob
+                );
+
+                newAnswers[currentQuestionIndex].uploaded = true;
+                setAnswers([...newAnswers]);
+                console.log('서버 업로드 성공');
+            } catch (error) {
+                console.error('업로드 실패:', error);
+
+                // 구체적인 오류 메시지 표시
+                let errorMsg = '서버 업로드에 실패했습니다.';
+                if (error.message.includes('413') || error.message.includes('파일이 너무 큽니다')) {
+                    errorMsg = '파일이 너무 큽니다. 더 짧게 답변해주세요.';
+                } else if (error.message.includes('500')) {
+                    errorMsg = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+                }
+
+                setRecordingError(errorMsg);
+
+                // 로컬에는 저장되어 있으므로 사용자에게 알림
+                alert('업로드에 실패했지만 답변은 로컬에 저장되었습니다. 면접을 계속 진행할 수 있습니다.');
             }
-
-            setRecordingError(errorMsg);
-
-            // 로컬에는 저장되어 있으므로 사용자에게 알림
-            alert('업로드에 실패했지만 답변은 로컬에 저장되었습니다. 면접을 계속 진행할 수 있습니다.');
+        } finally {
+            setIsProcessingVideo(false);
         }
     };
 
@@ -323,6 +342,7 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
         if (currentQuestionIndex < questions.length - 1) {
             setCurrentQuestionIndex(prev => prev + 1);
             setRecordingTime(0);
+            setIsProcessingVideo(false);
         } else {
             completeInterview();
         }
@@ -336,6 +356,7 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
         if (currentQuestionIndex > 0) {
             setCurrentQuestionIndex(prev => prev - 1);
             setRecordingTime(0);
+            setIsProcessingVideo(false);
         }
     };
 
@@ -580,216 +601,270 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
                 </div>
             </div>
 
-            {/* 메인 컨텐츠 - 질문을 카메라 위에 배치 */}
-            <div className="max-w-6xl mx-auto px-4 py-8">
-                {/* 현재 질문 - 카메라 위에 배치 */}
-                <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
-                            {currentQuestionIndex + 1}
-                        </div>
-                        <h2 className="text-xl font-semibold text-gray-900">질문</h2>
-                    </div>
-                    <div className="bg-blue-50 border-l-4 border-blue-600 p-6 rounded-r-lg">
-                        <p className="text-xl text-gray-800 leading-relaxed font-medium">
-                            {currentQuestion?.content}
-                        </p>
-                    </div>
-                </div>
-
-                {/* 큰 카메라 화면 */}
-                <div className="mb-8">
-                    <div className="bg-white rounded-xl shadow-sm p-6">
-                        <div className="mb-4 flex items-center justify-between">
-                            <h2 className="text-xl font-semibold text-gray-900">카메라</h2>
-                            <button
-                                onClick={initializeCamera}
-                                className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                            >
-                                <RefreshCw className="w-4 h-4" />
-                                새로고침
-                            </button>
+            {/* 메인 컨텐츠 - 개선된 레이아웃 */}
+            <div className="max-w-6xl mx-auto px-4 py-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* 왼쪽: 질문 */}
+                    <div className="lg:col-span-2 space-y-6">
+                        {/* 현재 질문 */}
+                        <div className="bg-white rounded-xl shadow-sm p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
+                                    {currentQuestionIndex + 1}
+                                </div>
+                                <h2 className="text-xl font-semibold text-gray-900">질문</h2>
+                            </div>
+                            <div className="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-r-lg">
+                                <p className="text-lg text-gray-800 leading-relaxed font-medium">
+                                    {currentQuestion?.content}
+                                </p>
+                            </div>
                         </div>
 
-                        {/* 큰 카메라 화면 */}
-                        <div className="relative mb-6">
-                            <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center overflow-hidden" style={{ minHeight: '400px' }}>
-                                {mediaStream ? (
-                                    <>
-                                        <video
-                                            ref={videoRef}
-                                            autoPlay
-                                            muted
-                                            playsInline
-                                            className="w-full h-full object-cover"
-                                            style={{
-                                                transform: 'scaleX(-1)',
-                                                backgroundColor: '#000'
-                                            }}
-                                        />
-                                        {/* 녹화 중 표시 */}
-                                        {isRecording && (
-                                            <div className="absolute top-4 left-4 bg-red-600 text-white px-3 py-2 rounded-lg flex items-center gap-2">
-                                                <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-                                                <span className="font-mono text-sm">{formatTime(recordingTime)}</span>
-                                                <span className="text-sm">녹화 중</span>
-                                            </div>
-                                        )}
-                                        {/* 카메라 상태 표시 */}
-                                        {!cameraInitialized && (
-                                            <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center">
-                                                <div className="text-center text-white">
-                                                    <Camera className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                                    <p className="text-sm mb-2">비디오 초기화 중...</p>
+                        {/* 카메라 화면 - 크기 조정 */}
+                        <div className="bg-white rounded-xl shadow-sm p-6">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-lg font-semibold text-gray-900">카메라</h2>
+                                <button
+                                    onClick={initializeCamera}
+                                    className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                >
+                                    <RefreshCw className="w-4 h-4" />
+                                    새로고침
+                                </button>
+                            </div>
+
+                            {/* 카메라 화면 - 크기 줄임 */}
+                            <div className="relative mb-4">
+                                <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center overflow-hidden" style={{ maxHeight: '300px' }}>
+                                    {mediaStream ? (
+                                        <>
+                                            <video
+                                                ref={videoRef}
+                                                autoPlay
+                                                muted
+                                                playsInline
+                                                className="w-full h-full object-cover"
+                                                style={{
+                                                    transform: 'scaleX(-1)',
+                                                    backgroundColor: '#000'
+                                                }}
+                                            />
+                                            {/* 녹화 중 표시 */}
+                                            {isRecording && (
+                                                <div className="absolute top-4 left-4 bg-red-600 text-white px-3 py-2 rounded-lg flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+                                                    <span className="font-mono text-sm">{formatTime(recordingTime)}</span>
+                                                    <span className="text-sm">녹화 중</span>
                                                 </div>
-                                            </div>
-                                        )}
-                                    </>
-                                ) : (
-                                    <div className="text-center text-white">
-                                        <Camera className="w-20 h-20 mx-auto mb-4 opacity-50" />
-                                        <p className="text-gray-300 text-lg mb-4">
-                                            {recordingError ? '카메라 연결 실패' : '카메라 연결 중...'}
-                                        </p>
-                                        {recordingError && (
-                                            <button
-                                                onClick={initializeCamera}
-                                                className="px-6 py-3 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-                                            >
-                                                다시 시도
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
+                                            )}
+                                            {/* 처리 중 표시 */}
+                                            {isProcessingVideo && (
+                                                <div className="absolute top-4 left-4 bg-orange-600 text-white px-3 py-2 rounded-lg flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-white rounded-full animate-spin"></div>
+                                                    <span className="text-sm">처리 중...</span>
+                                                </div>
+                                            )}
+                                            {/* 카메라 상태 표시 */}
+                                            {!cameraInitialized && (
+                                                <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center">
+                                                    <div className="text-center text-white">
+                                                        <Camera className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                                        <p className="text-sm mb-2">비디오 초기화 중...</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="text-center text-white">
+                                            <Camera className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                                            <p className="text-gray-300 mb-4">
+                                                {recordingError ? '카메라 연결 실패' : '카메라 연결 중...'}
+                                            </p>
+                                            {recordingError && (
+                                                <button
+                                                    onClick={initializeCamera}
+                                                    className="px-6 py-3 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                                                >
+                                                    다시 시도
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 녹화 컨트롤 */}
+                                <div className="flex items-center justify-center gap-4 mt-4">
+                                    {!isRecording ? (
+                                        <button
+                                            onClick={startRecording}
+                                            className="flex items-center gap-3 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 disabled:opacity-50"
+                                            disabled={!mediaStream || isProcessingVideo}
+                                        >
+                                            <Play className="w-5 h-5" />
+                                            {isProcessingVideo ? '처리 중...' : '답변 시작'}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={stopRecording}
+                                            className="flex items-center gap-3 bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-300"
+                                        >
+                                            <Square className="w-5 h-5" />
+                                            답변 완료
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
-                            {/* 녹화 컨트롤 - 카메라 아래 */}
-                            <div className="flex items-center justify-center gap-4">
-                                {!isRecording ? (
-                                    <button
-                                        onClick={startRecording}
-                                        className="flex items-center gap-3 bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 text-lg"
-                                        disabled={!mediaStream}
-                                    >
-                                        <Play className="w-6 h-6" />
-                                        답변 시작
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={stopRecording}
-                                        className="flex items-center gap-3 bg-gray-600 hover:bg-gray-700 text-white px-8 py-4 rounded-xl font-medium transition-all duration-300 text-lg"
-                                    >
-                                        <Square className="w-6 h-6" />
-                                        답변 완료
-                                    </button>
-                                )}
+                            {/* 오류 메시지 */}
+                            {recordingError && (
+                                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                                    <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+                                    <div>
+                                        <p className="text-red-700 text-sm font-medium">오류 발생</p>
+                                        <p className="text-red-600 text-sm">{recordingError}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 성공 메시지 */}
+                            {cameraInitialized && !recordingError && (
+                                <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                                    <CheckCircle className="w-5 h-5 text-green-500" />
+                                    <p className="text-green-700 text-sm">카메라가 성공적으로 연결되었습니다!</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* 오른쪽: 답변 진행 상황 */}
+                    <div className="space-y-6">
+                        <div className="bg-white rounded-xl shadow-sm p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">답변 진행 상황</h2>
+                            <div className="space-y-3">
+                                {questions.map((_, index) => (
+                                    <div key={index} className={`p-4 rounded-lg border-2 transition-colors ${
+                                        answers[index]
+                                            ? 'border-green-200 bg-green-50'
+                                            : index === currentQuestionIndex
+                                                ? 'border-blue-200 bg-blue-50'
+                                                : 'border-gray-200 bg-gray-50'
+                                    }`}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-medium ${
+                                                answers[index]
+                                                    ? 'bg-green-600 text-white'
+                                                    : index === currentQuestionIndex
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'bg-gray-400 text-white'
+                                            }`}>
+                                                {answers[index]
+                                                    ? <CheckCircle className="w-4 h-4" />
+                                                    : index + 1
+                                                }
+                                            </div>
+                                            <span className={`font-medium text-sm ${
+                                                answers[index]
+                                                    ? 'text-green-700'
+                                                    : index === currentQuestionIndex
+                                                        ? 'text-blue-700'
+                                                        : 'text-gray-500'
+                                            }`}>
+                                                질문 {index + 1}
+                                            </span>
+                                        </div>
+                                        {answers[index] && (
+                                            <div className="text-xs text-gray-600">
+                                                {formatTime(answers[index].recordingTime)}
+                                                <br />
+                                                {answers[index].uploaded ? (
+                                                    <span className="text-green-600">✓ 업로드됨</span>
+                                                ) : (
+                                                    <span className="text-orange-600">⏳ 대기중</span>
+                                                )}
+                                            </div>
+                                        )}
+                                        {index === currentQuestionIndex && !answers[index] && (
+                                            <div className="text-xs text-blue-600 font-medium">현재 질문</div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
-                        {/* 오류 메시지 */}
-                        {recordingError && (
-                            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                                <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
-                                <div>
-                                    <p className="text-red-700 text-sm font-medium">오류 발생</p>
-                                    <p className="text-red-600 text-sm">{recordingError}</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 성공 메시지 */}
-                        {cameraInitialized && !recordingError && (
-                            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
-                                <CheckCircle className="w-5 h-5 text-green-500" />
-                                <p className="text-green-700 text-sm">카메라가 성공적으로 연결되었습니다!</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 답변 상태 표시 */}
-                <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-4">답변 진행 상황</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-                        {questions.map((_, index) => (
-                            <div key={index} className={`p-4 rounded-lg border-2 transition-colors ${
-                                answers[index]
-                                    ? 'border-green-200 bg-green-50'
-                                    : index === currentQuestionIndex
-                                        ? 'border-blue-200 bg-blue-50'
-                                        : 'border-gray-200 bg-gray-50'
-                            }`}>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-medium ${
-                                        answers[index]
-                                            ? 'bg-green-600 text-white'
-                                            : index === currentQuestionIndex
-                                                ? 'bg-blue-600 text-white'
-                                                : 'bg-gray-400 text-white'
-                                    }`}>
-                                        {answers[index]
-                                            ? <CheckCircle className="w-4 h-4" />
-                                            : index + 1
-                                        }
+                        {/* 현재 답변 상태 */}
+                        <div className="bg-white rounded-xl shadow-sm p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">현재 답변</h3>
+                            <div className="text-center">
+                                {hasCurrentAnswer() ? (
+                                    <div className="text-green-600">
+                                        <CheckCircle className="w-8 h-8 mx-auto mb-2" />
+                                        <p className="font-medium">답변 완료</p>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            {formatTime(answers[currentQuestionIndex]?.recordingTime || 0)}
+                                        </p>
                                     </div>
-                                    <span className={`font-medium text-sm ${
-                                        answers[index]
-                                            ? 'text-green-700'
-                                            : index === currentQuestionIndex
-                                                ? 'text-blue-700'
-                                                : 'text-gray-500'
-                                    }`}>
-                                        질문 {index + 1}
-                                    </span>
-                                </div>
-                                {answers[index] && (
-                                    <div className="text-xs text-gray-600">
-                                        {formatTime(answers[index].recordingTime)}
-                                        <br />
-                                        {answers[index].uploaded ? (
-                                            <span className="text-green-600">✓ 업로드됨</span>
-                                        ) : (
-                                            <span className="text-orange-600">⏳ 대기중</span>
-                                        )}
+                                ) : isRecording ? (
+                                    <div className="text-red-600">
+                                        <div className="w-8 h-8 bg-red-600 rounded-full mx-auto mb-2 animate-pulse"></div>
+                                        <p className="font-medium">녹화 중</p>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            {formatTime(recordingTime)}
+                                        </p>
+                                    </div>
+                                ) : isProcessingVideo ? (
+                                    <div className="text-orange-600">
+                                        <div className="w-8 h-8 border-4 border-orange-600 border-t-transparent rounded-full mx-auto mb-2 animate-spin"></div>
+                                        <p className="font-medium">처리 중</p>
+                                    </div>
+                                ) : (
+                                    <div className="text-gray-500">
+                                        <AlertCircle className="w-8 h-8 mx-auto mb-2" />
+                                        <p className="font-medium">답변 대기</p>
+                                        <p className="text-sm mt-1">녹화 버튼을 눌러 답변을 시작하세요</p>
                                     </div>
                                 )}
-                                {index === currentQuestionIndex && !answers[index] && (
-                                    <div className="text-xs text-blue-600 font-medium">현재 질문</div>
-                                )}
                             </div>
-                        ))}
+                        </div>
                     </div>
                 </div>
 
                 {/* 하단 네비게이션 */}
-                <div className="flex justify-between items-center pt-6 border-t border-gray-200">
-                    <button
-                        onClick={goToPreviousQuestion}
-                        disabled={currentQuestionIndex === 0}
-                        className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                    >
-                        <ArrowLeft className="w-5 h-5" />
-                        이전 질문
-                    </button>
+                <div className="mt-8 bg-white rounded-xl shadow-sm p-6">
+                    <div className="flex justify-between items-center">
+                        <button
+                            onClick={goToPreviousQuestion}
+                            disabled={currentQuestionIndex === 0}
+                            className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                            이전 질문
+                        </button>
 
-                    <div className="flex items-center gap-4">
-                        {/* 답변 상태 표시 */}
-                        {hasCurrentAnswer() ? (
-                            <span className="text-green-600 text-sm flex items-center gap-2">
-                                <CheckCircle className="w-4 h-4" />
-                                답변 완료
-                            </span>
-                        ) : (
-                            <span className="text-orange-600 text-sm flex items-center gap-2">
-                                <AlertCircle className="w-4 h-4" />
-                                답변 필요
-                            </span>
-                        )}
+                        <div className="text-center">
+                            <p className="text-sm text-gray-600 mb-2">
+                                질문 {currentQuestionIndex + 1} / {questions.length}
+                            </p>
+                            <div className="flex items-center gap-2">
+                                {hasCurrentAnswer() ? (
+                                    <span className="text-green-600 text-sm flex items-center gap-2">
+                                        <CheckCircle className="w-4 h-4" />
+                                        답변 완료
+                                    </span>
+                                ) : (
+                                    <span className="text-orange-600 text-sm flex items-center gap-2">
+                                        <AlertCircle className="w-4 h-4" />
+                                        답변 필요
+                                    </span>
+                                )}
+                            </div>
+                        </div>
 
                         <button
                             onClick={goToNextQuestion}
+                            disabled={!hasCurrentAnswer() || isRecording || isProcessingVideo}
                             className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors ${
-                                hasCurrentAnswer()
+                                hasCurrentAnswer() && !isRecording && !isProcessingVideo
                                     ? 'bg-blue-600 hover:bg-blue-700 text-white'
                                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             }`}
@@ -798,16 +873,16 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
                             {currentQuestionIndex < questions.length - 1 && <SkipForward className="w-5 h-5" />}
                         </button>
                     </div>
-                </div>
 
-                {/* 안내 메시지 */}
-                {!hasCurrentAnswer() && (
-                    <div className="mt-4 text-center">
-                        <p className="text-gray-600 text-sm">
-                            현재 질문에 답변을 녹화한 후 다음 질문으로 넘어갈 수 있습니다.
-                        </p>
-                    </div>
-                )}
+                    {/* 안내 메시지 */}
+                    {!hasCurrentAnswer() && !isRecording && !isProcessingVideo && (
+                        <div className="mt-4 text-center">
+                            <p className="text-gray-600 text-sm">
+                                현재 질문에 답변을 녹화한 후 다음 질문으로 넘어갈 수 있습니다.
+                            </p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
