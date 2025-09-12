@@ -83,7 +83,7 @@ const InterviewQuestionPage = ({ onNavigate, selectedJob }) => {
             const token = localStorage.getItem('accessToken');
 
             const response = await fetch(
-                `http://43.200.102.117:8080/api/questions/random?jobId=${selectedJob.id}&count=5`,
+                `https://api.god-of-interview.site/api/questions/random?jobId=${selectedJob.id}&count=5`,
                 {
                     headers: {
                         'Authorization': `Bearer ${token}`,
