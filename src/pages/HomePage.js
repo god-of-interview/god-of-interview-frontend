@@ -43,7 +43,7 @@ const HomePage = ({ onNavigate }) => {
 
     const fetchUserProfile = async (token) => {
         try {
-            const response = await fetch('43.200.102.117:8080/api/users/me', {
+            const response = await fetch('http://43.200.102.117:8080/api/users/me', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'

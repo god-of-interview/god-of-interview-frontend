@@ -1,4 +1,4 @@
-const API_BASE_URL = '43.200.102.117:8080/api/questions';
+const API_BASE_URL = 'http://43.200.102.117:8080/api/questions';
 
 const getAuthHeaders = () => {
     const token = localStorage.getItem('accessToken');
