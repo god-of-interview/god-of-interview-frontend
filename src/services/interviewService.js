@@ -1,6 +1,6 @@
 // src/services/interviewService.js - 백엔드 코드에 정확히 맞춘 버전
 
-const API_BASE_URL = 'http://localhost:8080/api/interviews';
+const API_BASE_URL = '43.200.102.117:8080/api/interviews';
 
 const getAuthHeaders = () => {
     const token = localStorage.getItem('accessToken');

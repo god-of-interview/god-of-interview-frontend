@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8080/api/auth';
+const API_BASE_URL = '43.200.102.117:8080/api/auth';
 
 export const authService = {
     login: async (loginData) => {
