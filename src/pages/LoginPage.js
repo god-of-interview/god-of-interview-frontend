@@ -14,7 +14,7 @@ const LoginPage = ({ onNavigate }) => {
 
     const apiCall = async (endpoint, method, data) => {
         try {
-            const response = await fetch(`http://localhost:8080/api/auth/${endpoint}`, {
+            const response = await fetch(`43.200.102.117:8080/api/auth/${endpoint}`, {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
