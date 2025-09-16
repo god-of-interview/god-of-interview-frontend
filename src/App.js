@@ -9,6 +9,7 @@ import DeleteAccountPage from './pages/DeleteAccountPage';
 import GuidePage from './pages/GuidePage';
 import JobSelectionPage from './pages/JobSelectionPage'; // 직업 선택 페이지 추가
 import InterviewQuestionPage from './pages/InterviewQuestionPage'; // 면접 질문 페이지 추가
+import InterviewRecordsPage from './pages/InterviewRecordsPage';
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState('home');
@@ -40,6 +41,8 @@ const App = () => {
         return <UserSearchPage onNavigate={handleNavigation} />;
       case 'delete-account':
         return <DeleteAccountPage onNavigate={handleNavigation} />;
+      case 'interview-records':
+        return <InterviewRecordsPage onNavigate={handleNavigation} />;
       case 'job-selection':
         return (
             <JobSelectionPage

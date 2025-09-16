@@ -229,6 +229,17 @@ const HomePage = ({ onNavigate }) => {
                                                         내 정보 수정
                                                     </button>
 
+                                                    <button
+                                                        onClick={() => {
+                                                            onNavigate('interview-records');
+                                                            setIsProfileDropdownOpen(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                                                    >
+                                                        <BarChart3 className="w-4 h-4" />
+                                                        내 면접 기록
+                                                    </button>
+
                                                     <div className="border-t border-gray-100 my-1"></div>
 
                                                     <button
@@ -330,6 +341,16 @@ const HomePage = ({ onNavigate }) => {
                                         className="w-full text-left px-3 py-2 text-gray-700 hover:text-blue-600 block text-base font-medium"
                                     >
                                         내 정보 수정
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            onNavigate('interview-records');
+                                            setIsMenuOpen(false);
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-gray-700 hover:text-blue-600 block text-base font-medium"
+                                    >
+                                        내 면접 기록
                                     </button>
 
                                     <button
