@@ -7,16 +7,19 @@ import EditProfilePage from './pages/EditProfilePage';
 import UserSearchPage from './pages/UserSearchPage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
 import GuidePage from './pages/GuidePage';
-import JobSelectionPage from './pages/JobSelectionPage'; // 직업 선택 페이지 추가
-import InterviewQuestionPage from './pages/InterviewQuestionPage'; // 면접 질문 페이지 추가
+import JobSelectionPage from './pages/JobSelectionPage';
+import InterviewQuestionPage from './pages/InterviewQuestionPage';
 import InterviewRecordsPage from './pages/InterviewRecordsPage';
+import InterviewFeedbackPage from './pages/InterviewFeedbackPage'; // 새로 추가
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState('home');
-  const [selectedJob, setSelectedJob] = useState(null); // 선택된 직업 저장
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [navigationParams, setNavigationParams] = useState(null); // 페이지 간 파라미터 전달용
 
-  const handleNavigation = (page) => {
+  const handleNavigation = (page, params = null) => {
     setCurrentPage(page);
+    setNavigationParams(params);
   };
 
   const handleJobSelection = (job) => {
@@ -43,6 +46,13 @@ const App = () => {
         return <DeleteAccountPage onNavigate={handleNavigation} />;
       case 'interview-records':
         return <InterviewRecordsPage onNavigate={handleNavigation} />;
+      case 'interview-feedback':
+        return (
+            <InterviewFeedbackPage
+                onNavigate={handleNavigation}
+                interviewId={navigationParams?.interviewId}
+            />
+        );
       case 'job-selection':
         return (
             <JobSelectionPage
@@ -81,6 +91,12 @@ const App = () => {
                       className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg"
                   >
                     사용자 검색
+                  </button>
+                  <button
+                      onClick={() => handleNavigation('interview-records')}
+                      className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg"
+                  >
+                    내 면접 기록
                   </button>
                   <button
                       onClick={() => handleNavigation('home')}

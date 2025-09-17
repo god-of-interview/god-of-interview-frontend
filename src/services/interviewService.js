@@ -1,4 +1,4 @@
-// src/services/interviewService.js - 백엔드 코드에 정확히 맞춘 버전
+// src/services/interviewService.js - 면접 기록 조회 기능 추가
 
 const API_BASE_URL = 'https://api.god-of-interview.site/api/interviews';
 
@@ -127,6 +127,39 @@ export const interviewService = {
             return result;
         } catch (error) {
             console.error('면접 완료 오류:', error);
+            throw error;
+        }
+    },
+
+    // 내 면접 기록 조회 (새로 추가)
+    getMyInterviewRecords: async (page = 0, size = 10) => {
+        try {
+            console.log('면접 기록 조회 요청:', { page, size });
+
+            const params = new URLSearchParams({
+                page: page.toString(),
+                size: size.toString()
+            });
+
+            const response = await fetch(`${API_BASE_URL}/me?${params}`, {
+                method: 'GET',
+                headers: {
+                    ...getAuthHeaders(),
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('면접 기록 조회 응답 상태:', response.status);
+            const result = await response.json();
+            console.log('면접 기록 조회 응답 데이터:', result);
+
+            if (!response.ok) {
+                throw new Error(result.message || '면접 기록 조회에 실패했습니다.');
+            }
+
+            return result;
+        } catch (error) {
+            console.error('면접 기록 조회 오류:', error);
             throw error;
         }
     }
