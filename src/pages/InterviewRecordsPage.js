@@ -56,8 +56,8 @@ const InterviewRecordsPage = ({ onNavigate }) => {
     };
 
     const handleViewFeedback = (interviewId) => {
-        // 피드백 페이지로 이동
-        onNavigate('interview-feedback', { interviewId });
+        console.log('피드백 조회 요청 - interviewId:', interviewId);
+        onNavigate('interview-feedback', { interviewId: interviewId });
     };
 
     const formatDate = (dateString) => {
